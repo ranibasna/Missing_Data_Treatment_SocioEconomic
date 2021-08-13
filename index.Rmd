@@ -13,6 +13,7 @@ bibliography: miss.bib
 csl: 2d-materials.csl
 output:
   distill::distill_article:
+    self_contained: false
     code_folding: true
     # highlight: haddock
     highlight: rstudio
