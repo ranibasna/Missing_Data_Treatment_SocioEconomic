@@ -1,0 +1,5 @@
+# Ignore these directories:
+data&Objects/
+
+# Ignore temporary files:
+# .log.tmp

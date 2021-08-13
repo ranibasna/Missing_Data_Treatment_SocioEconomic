@@ -1,0 +1,270 @@
+---
+title: "Missing Data Imputation"
+description: |
+  An article about methods used for missing data imputation for the SocioEconomic paper.
+author:
+  - name: Rani Basna 
+    url: https://example.com/norajones
+    affiliation: University of Gothenburg
+    affiliation_url: https://www.gu.se/en/about/find-staff/ranibasna
+    orcid_id: 0000-0001-7510-8460
+date: "`r Sys.Date()`"
+bibliography: miss.bib
+csl: 2d-materials.csl
+output:
+  distill::distill_article:
+    code_folding: true
+    # highlight: haddock
+    highlight: rstudio
+    # highlight_downlit: true
+    toc: true
+    toc_depth: 2
+    # toc_float: true
+---
+
+<style>
+html {
+  scroll-behavior: smooth;
+}
+d-article {
+    contain: none;
+  }
+#TOC {
+  position: fixed;
+  z-index: 50;
+  background: #ebebeb;     /* or   background: white; */
+  padding: 10px;           /* optional */
+  border-radius: 5px;      /* optional */
+  }
+
+/* Hide the ToC when resized to mobile or tablet:  480px, 768px, 900px */
+@media screen and (max-width: 900px) {
+#TOC {
+    position: relative;
+  }
+}
+</style>
+
+```{r xaringanExtra-clipboard, echo=FALSE}
+xaringanExtra::use_clipboard()
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r libraries}
+library(mice)
+library(dplyr)
+library(naniar)
+library(finalfit)
+library(haven)
+library(miceadds)
+library(tibble)
+library(VIM)
+```
+
+```{r functions}
+Prepare_data <- function(Smok_Soci_data){
+  # make it a data frame object
+  my_f_data <- as.data.frame(Smok_Soci_data)
+  # dropping uneccesary variables
+  drops <- c("ID","cohort")
+  my_f_data <- my_f_data[ , !(names(my_f_data) %in% drops)]
+  # dropping categorized variables 
+  my_f_data <- my_f_data %>% select(-c(cbmi, agecateg, cduration))
+  # drop variables with high correlations
+  drops_corr <- c("weight", "quitage")
+  my_f_data <- my_f_data[ , !(names(my_f_data) %in% drops_corr)]
+  # removing non-related variables
+  drops_rel <- c("birthyear","height","age_group")
+  my_f_data <- my_f_data[ , !(names(my_f_data) %in% drops_rel)]
+  # drop more correlated vars
+  #drops_corr_cat_2 <- c("asthma_treatmnt","varq10b","cbc","varq10c")
+  drops_corr_cat_2 <- c("asthma_treatmnt","cbc")
+  my_f_data <- my_f_data[ , !(names(my_f_data) %in% drops_corr_cat_2)]
+  
+  # if mice is running then also s_amount
+  my_f_data <- my_f_data %>% select(-c(asthma_diagnosed, asthma, s_amount))
+  
+  # from mice models out variables
+  my_f_data <- my_f_data %>% select(-c(e_smoking))
+  
+  # corr_3 correlated with the outcome c_asthma
+  drops_corr_cat_3 <- c("alle_asthma","noalle_asthma","w_asthma")
+  my_f_data <- my_f_data[ , !(names(my_f_data) %in% drops_corr_cat_3)]
+  # remove any_smp and only_symptoms
+  my_f_data <- my_f_data %>% select(-c(any_smp, only_symptoms)) # did help a lot
+  # trt_copd
+  my_f_data <- my_f_data %>% select(- trt_copd) # did help
+  # edu_credits
+  my_f_data <- my_f_data %>% select(- edu_credits) # did help
+  
+  # converting variables to factor and numerical
+  num_cols <- colnames(my_f_data %>% select( c(BMI, age,duration,startage)))
+  fact_cols <-  setdiff(colnames(my_f_data), num_cols)
+  # mutare to factors and num
+  my_f_data <- my_f_data %>% mutate_at(num_cols, as.numeric)
+  my_f_data <- my_f_data %>% mutate_at(fact_cols, factor)
+  
+  return(my_f_data)
+}
+
+# to conclude  we need to remove the edu_credit, s_amount, her_dis, herditery_puldis, any_symp, only_symp, trt_copd
+# we need to recreate the any_smp and only_symp afterwords
+
+# data preprocssing
+
+Preprocess_Data <- function(Ready_Raw_data){
+  # check the data typee
+  if (!(is.data.frame(Ready_Raw_data))){
+    stop("The input  is not a dataframe format")
+  }
+  # ordinal as orderd variables 
+  Ready_Raw_data$jabstatus <- ordered(Ready_Raw_data$jabstatus, levels=1:8)
+  Ready_Raw_data$sei_class <- ordered(Ready_Raw_data$sei_class, levels=0:7)
+  Ready_Raw_data$smoking_status <- ordered(Ready_Raw_data$smoking_status, levels=0:2)
+  
+  #data_all$education <- ordered(data_all$education, levels=0:2)
+  #Ready_Raw_data$edu_credits <- ordered(Ready_Raw_data$edu_credits, levels=0:6)
+  #Ready_Raw_data$s_amount <- ordered(Ready_Raw_data$s_amount,levels=0:3)
+  Ready_Raw_data$e_amount <- ordered(Ready_Raw_data$e_amount,levels=1:3)
+  
+  # more ordinal
+  Ready_Raw_data$syk_class <- ordered(Ready_Raw_data$syk_class,levels=0:10)
+  Ready_Raw_data$SSY_class <- ordered(Ready_Raw_data$SSY_class,levels=0:10) #(2012 classification)
+  
+  # remove the 2012 classification
+  Ready_Raw_data <- Ready_Raw_data %>% select(- SSY_class)
+  
+  return(Ready_Raw_data)
+}
+```
+
+
+```{r data}
+data_all_original <- read_dta("/home/rstudio/socioeconomics/data&Objects/Analysis_dataset(60)25.2.21.dta.dta")
+data_all <- Prepare_data(data_all_original)
+data_all <- Preprocess_Data(data_all)
+```
+
+
+# Introduction
+
+The essential concern with missing data is the potential selection bias produced by the mechanism of the missingness @perkins2018principled. For instance, the MAR assumption, i.e. the likelihood of missing data variable Y being missing is unrelated to the value of Y after controlling for observed covariates available in the data set. A complete case model under the MAR assumption may lead to biased results because the outcome patterns in subjects with complete data may differ from those with missing data. The degree of bias can be considerable, particularly if there are large volumes of missing data @van2018flexible and @perkins2018principled. Besides, complete case analysis can also result in a significant loss of sample size @van2018flexible @perkins2018principled. 
+
+In recent years there have been increased recommendations from scientific publications to apply methodolgical approaches to missing data problems @little2012prevention. Multiple imputations (MI) is one of the common powerful approaches to treat the incomplete data problem that has several advantages. MI works as follows. First, every missing value is being predicted based on a model that includes the other covariate in addition to some chosen auxiliary variables. Second, the process is repeated in an iterative fashion resulting in multiple completed data sets. Every time the imputation round happens, a slightly different value is produced. Under the MAR assumption, this imputation procedure produces unbiased estimates of the missing data values. (add the pooling if the pooled results are positive)
+
+In this work, we applied the MI approach to the existing missing cases. We assessed that MI is a valid approach given that potential loss of information resulted from the missing data amount. (gives the missingness percentage to the top 3 or 5 variables). We followed the latest scientific recommendations for assessing the use of the Multiple Imputation method @nguyen2017model. In the executed MI workflow, we included all the variables that we planned to use in the Bayesian Network analysis. Besides,  We included an additional set of auxiliary variables \textcolor{red}{give some detail about those variables} that correlate or predict the pattern of the missingness (For instance, features that are related to the nonresponse or variables that are known to have influenced the occurrence of missing data such variables may contain information and  reasons for nonresponse). This is motivated by the expected improvements in the plausibility of the MAR assumption underlying MI @sterne2009multiple.  We used the mice R package to conduct the imputation in a High-Performance Computing environment @van2015package.
+
+## Assessing the missing data
+
+Let us start by looking at some plots to help us understand the missing data patteren better. We will be using the R package naniar for that reason.  
+
+```{r, fig.height=5, cache=TRUE}
+vis_miss(data_all, warn_large_data = FALSE)
+```
+```{r, echo=TRUE, cache=TRUE}
+gg_miss_upset(data_all)
+```
+We can see from the figures above that the missingness percentage is $1.8%$. In the second figure we see the top five variables that include missingness and the intersection between these five variables with the most amount of missingness is in the variable e_amount (electrical smoking). Let us look at some important variables for our study in a moree detail, In the figure below we examine the sei_class variable. We plot the percentage of the missingness within each category of the sei_class variable. 
+
+```{r cache=TRUE}
+gg_miss_fct(x = data_all, fct = sei_class)
+```
+We can see that people with the class 6 and 7 has a high missingess percentage compared to the rest of the classes with regards to both the trt_bp and e_amount. 
+
+```{r, cache=TRUE}
+explanatory =  c("education", "duration", "BMI")
+dependent = "age"
+data_all %>%  missing_pairs(dependent, explanatory)
+```
+We can see that people with missing values in Duration are older than those who reported that duration value. this suggest that the missing mechanisim is MAR as the pattern of missingness dependes on the age varaible and not on duration itself. However, we still need to test for the MNAR as it maybe the case that the duration it self has an effect. Let us try a different variables to test against the age and education variables. For instance, the startage and syk_class variables.
+
+```{r, cache=TRUE}
+explanatory =  c("education", "startage", "syk_class")
+dependent = "age"
+data_all %>%  missing_pairs(dependent, explanatory)
+```
+
+the same hold true for the startage variable. the same for the relation between age and education: it seems that patients with missing education are older than with non missing. This means that adjusting for age should solve the case. In fact this should result that 
+
+# Missing Value Imputation
+
+The above presentation motivate us to preform the MI using the MICE approach. The full description and reproducible workflow can be found [in this Github repository](https://github.com/ranibasna/Modification_Effect_Socioeconomic_smoking_Asthma/blob/master/R/HPC_R_mice_BN_code.R). The code is written in a style to be used inside a High preformace computing environment (HPC). The processes of preformaing MI is going like this.
+1. We first processes the original data by dropping the highely correlated variables
+2. Due to high depndencies between some variables we impose which variables to include in the predictive matrix that is used by mice imputation.
+3. We apply the parlmice which is the version of the R function mice that can perfom a parallel computation
+
+```{r, eval=FALSE}
+parlmice(data = data_all, n.core = 8, n.imp.core = 7, maxit = 40, predictorMatrix = pred, seed = 11)
+```
+
+Where n.core is number of cores and n.imp.cores number of imputations per core.
+
+# Validating the Imputation Process
+
+```{r, cache=TRUE}
+# sample from the big imputed mice model to select smaller number of multiple imputations
+imp_parl_final = readRDS(file = "/home/rstudio/socioeconomics/data&Objects/final_mice_model.rds")
+datalist <- mids2datlist(imp_parl_final)
+mids_subset <- subset_datlist(datalist, index = 70:85, toclass = "mids")
+```
+
+```{r, cache=TRUE}
+xyplot(mids_subset,BMI ~ startage + duration,pch=18,cex=1)
+densityplot(mids_subset)
+stripplot(mids_subset, pch = 20, cex = 1.2)
+```
+
+```{r, cache=TRUE}
+imp_data <- complete(imp_parl_final, 1)
+```
+
+
+```{r, cache=TRUE}
+df_1 <- data_all %>% select(c(BMI, age)) %>% rename(BMI_imp = BMI) %>%
+  mutate(BMI_imp = as.logical(ifelse(is.na(BMI_imp),"TRUE","FALSE"))) %>% rownames_to_column()
+df_2 <- imp_data %>% select(age, BMI) %>% rownames_to_column()
+df <- left_join(df_1,df_2)
+
+df <- as.data.frame(df)
+vars <- c("age", "BMI","BMI_imp")
+marginplot(df[,vars], delimiter="imp", alpha=0.6, pch=c(19))
+```
+
+```{r, cache=TRUE}
+df_1 <- data_all %>% select(c(duration, age)) %>% rename(duration_imp = duration) %>%
+  mutate(duration_imp = as.logical(ifelse(is.na(duration_imp),"TRUE","FALSE"))) %>% rownames_to_column()
+df_2 <- imp_data %>% select(age, duration) %>% rownames_to_column()
+df <- left_join(df_1,df_2)
+
+df <- as.data.frame(df)
+vars <- c("age", "duration","duration_imp")
+marginplot(df[,vars], delimiter="imp", alpha=0.6, pch=c(19))
+```
+
+ We can see that the imputation model correct for the fact that the people with older age tend to have missing values are duration and start age, that can be attributed to that fact that either they forgot the starting age (hence the duration as well). Or they did not want to include thos information as it make them feels they have been smoking for long time. This is still valid under the MAR assumption.
+
+```{r, cache=TRUE}
+#cat_var <- sei_class
+df_1 <- data_all %>% select(c(BMI, sei_class)) %>% rename(sei_class_imp = sei_class) %>%
+  mutate(sei_class_imp = as.logical(ifelse(is.na(sei_class_imp),"TRUE","FALSE"))) %>% rownames_to_column()
+
+df_2 <- imp_data %>% select(sei_class, BMI) %>% rownames_to_column()
+
+df <- left_join(df_1,df_2)
+df <- as.data.frame(df)
+vars <- c("BMI","sei_class","sei_class_imp")
+barMiss(df[,vars], delimiter = "_imp", selection = "any", only.miss = FALSE)
+##
+df_1 <- data_all %>% select(c(BMI, syk_class)) %>% rename(syk_class_imp = syk_class) %>%
+  mutate(syk_class_imp = as.logical(ifelse(is.na(syk_class_imp),"TRUE","FALSE"))) %>% rownames_to_column()
+df_2 <- imp_data %>% select(syk_class, BMI) %>% rownames_to_column()
+df <- left_join(df_1,df_2)
+df <- as.data.frame(df)
+vars <- c("BMI","syk_class","syk_class_imp")
+barMiss(df[,vars], delimiter = "_imp", selection = "any", only.miss = FALSE)
+```
+
+
