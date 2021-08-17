@@ -1,5 +1,8 @@
 # Ignore these directories:
 data&Objects/
+index_cache/
 
 # Ignore temporary files:
 # .log.tmp
+header.css
+header.html
