@@ -901,7 +901,141 @@ plot.MI<-function(IM,symmetric=FALSE,DIM=c(1,2),scale=FALSE,web=FALSE,ellipses=T
 
 
 
+ 
+# convert to dagitty and orint dag functions ----
 
+##
+bn_to_adjmatrix <- function(bn_obj) {
+  edg <- as.data.frame(bn_obj$arcs)
+  node_names <- names(bn_obj$nodes)
+  ans_mat <- matrix(
+    data = 0, nrow = length(node_names),
+    ncol = length(node_names),
+    dimnames = list(node_names, node_names)
+  )
+  
+  ans_mat[as.matrix(edg[c("from", "to")])] <- 1
+  return(ans_mat)
+}
+###
+adjmatrix_to_dagitty <- function(adjmatrix) {
+  if (is.null(rownames(adjmatrix)) | is.null(colnames(adjmatrix)) | !identical(rownames(adjmatrix), colnames(adjmatrix))) {
+    warning("Matrix column names or rownames are either missing or not compatible. They will be replaced by numeric node names")
+    nodes <- 1:nrow(adjmatrix)
+  } else {
+    nodes <- rownames(adjmatrix)
+  }
+  
+  from_to <- which(adjmatrix == 1, arr.ind = T)
+  
+  dag_string <- paste0(
+    "dag { \n",
+    paste0(nodes, collapse = "\n"),
+    "\n",
+    paste0(apply(from_to, 1, function(x) paste0(nodes[x[1]], " -> ", nodes[x[2]])),
+           collapse = "\n"
+    ),
+    "\n } \n"
+  )
+  return(dagitty:::dagitty(dag_string))
+}
+
+##
+causal_direction <- function(vec_1, vec_2, continuous_thresh, discrete_thresh) {
+  if (class(vec_1) == "character") vec_1 <- factor(vec_1)
+  if (class(vec_2) == "character") vec_2 <- factor(vec_2)
+  y_cond_x <- function(x, y) {
+    ans <- sapply(levels(x), function(x_val) {
+      table(y[x == x_val]) / sum(x == x_val)
+    })
+    ans[is.nan(ans)] <- 0
+    ans
+  }
+  if (class(vec_1) == "factor" & class(vec_2) == "numeric"){ 
+    vec_2 <- factor(infotheo::discretize(vec_2)$X)
+  }
+  if (class(vec_1) == "numeric" & class(vec_2) == "factor"){ 
+    vec_1 <- factor(infotheo::discretize(vec_1)$X)
+  }
+  if (class(vec_1) == "factor" & class(vec_2) == "factor") {
+    p_vec_2_given_vec1 <- y_cond_x(x = vec_1, y = vec_2)
+    p_vec_1 <- table(vec_1) / length(vec_1)
+    dist_vec_1_causes_vec_2 <- energy:::dcor(p_vec_1, t(p_vec_2_given_vec1))
+    
+    p_vec_1_given_vec2 <- y_cond_x(x = vec_2, y = vec_1)
+    p_vec_2 <- table(vec_2) / length(vec_2)
+    dist_vec_2_causes_vec_1 <- energy:::dcor(p_vec_2, t(p_vec_1_given_vec2))
+    
+    if (dist_vec_2_causes_vec_1 - dist_vec_1_causes_vec_2 > discrete_thresh) {
+      return("vec 1 causes vec 2")
+    } else if(dist_vec_1_causes_vec_2 - dist_vec_2_causes_vec_1 > discrete_thresh){
+      return("vec 2 causes vec 1")
+    } else {
+      return("not sure")
+    }
+  } else {
+    cause_sum <- as.numeric(generalCorr:::some0Pairs(data.frame(vec_1, vec_2), verbo = F)$outVote[7])
+    if (cause_sum > continuous_thresh) {
+      return("vec 1 causes vec 2")
+    } else if (cause_sum < -continuous_thresh){
+      return("vec 2 causes vec 1")
+    } else {
+      return("not sure")
+    }
+  }
+}
+##
+orient_dag <- function(adjmatrix, x, max_continuous_pairs_sample = 5000, continuous_thresh = 1, discrete_thresh = 0.3) {
+  if (!is.matrix(adjmatrix)) {
+    stop("Input DAG must be represented as adjacency matrix")
+  } else {
+    DAG_rownames <- rownames(adjmatrix)
+    DAG_colnames <- colnames(adjmatrix)
+    if (!identical(DAG_rownames, DAG_colnames)) {
+      stop("DAG adjacency matrix rownames and colnames must be identical")
+    }
+    if (mean(DAG_rownames %in% names(x)) < 1) {
+      stop("Some nodes are missing from the input data x")
+    }
+  }
+  
+  edges <- which(adjmatrix == 1, arr.ind = T)
+  i = 1
+  while(i <= nrow(edges)){
+    dup_idx <- integer(0)
+    dup_idx <- which(apply(edges[, c(2,1)], 1, function(x) x[1] == edges[i, 1] & x[2] == edges[i, 2]))
+    if(length(dup_idx) == 1) {
+      adjmatrix[edges[dup_idx, 1], edges[dup_idx, 2]] <- 0 # remove one of the duplicates
+      edges <- edges[-dup_idx, ]
+    }
+    vec_1 <- x[[DAG_rownames[edges[i, 1]]]]
+    vec_2 <- x[[DAG_rownames[edges[i, 2]]]]
+    if (class(vec_1) == "numeric" & class(vec_2) == "numeric"){
+      if(is.null(max_continuous_pairs_sample)){
+        next # dont change orientation
+      } else {
+        samples <- sample.int(length(vec_1), min(max_continuous_pairs_sample, length(vec_1)))
+        vec_1 <- vec_1[samples]
+        vec_2 <- vec_2[samples]
+      }
+    } 
+    
+    cause <- causal_direction(vec_1, vec_2, 
+                              continuous_thresh = ifelse(length(dup_idx) == 1, 0, continuous_thresh), # if bi-directed take whichever has higher score
+                              discrete_thresh = ifelse(length(dup_idx) == 1, 0, discrete_thresh) # if bi-directed take whichever has higher score)
+    )
+    if (cause == "vec 1 causes vec 2") { 
+      adjmatrix[edges[i, 1], edges[i, 2]] <- 1
+      adjmatrix[edges[i, 2], edges[i, 1]] <- 0
+    } else if(cause == "vec 2 causes vec 1"){
+      adjmatrix[edges[i, 1], edges[i, 2]] <- 0
+      adjmatrix[edges[i, 2], edges[i, 1]] <- 1
+    }
+    i <- i + 1
+  }
+  
+  return(adjmatrix)
+}
 
 
 
