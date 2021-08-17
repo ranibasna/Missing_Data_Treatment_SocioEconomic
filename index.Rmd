@@ -60,6 +60,10 @@ categories:
 xaringanExtra::use_clipboard()
 ```
 
+```{r xaringan-panelset, echo=FALSE}
+xaringanExtra::use_panelset()
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
@@ -919,19 +923,19 @@ vis_miss(data_all, warn_large_data = FALSE)
 ```{r, echo=TRUE, cache=TRUE}
 gg_miss_upset(data_all)
 ```
-We can see from the figures above that the missingness percentage is $1.8%$. In the second figure we see the top five variables that include missingness and the intersection between these five variables with the most amount of missingness is in the variable e_amount (electrical smoking). Let us look at some important variables for our study in a moree detail, In the figure below we examine the sei_class variable. We plot the percentage of the missingness within each category of the sei_class variable. 
+We can see from the figures above that the missingness percentage is 1.81.8. In the second figure, we see the top five variables that include missingness and the intersection between these five variables with the most amount of missingness is in the variable e_amount (electrical smoking). Let us look at some important variables for our study in more detail, In the figure below we examine the sei_class variable. We plot the percentage of the missingness within each category of the sei_class variable.
 
 ```{r, cache=TRUE}
 gg_miss_fct(x = data_all, fct = sei_class)
 ```
-We can see that people with the class 6 and 7 has a high missingess percentage compared to the rest of the classes with regards to both the trt_bp and e_amount. 
+We can see that people with the class 6 and 7 has a high missingness percentage compared to the rest of the classes with regards to both the trt_bp and e_amount. 
 
 ```{r, cache=TRUE}
 explanatory =  c("education", "duration", "BMI")
 dependent = "age"
 data_all %>%  missing_pairs(dependent, explanatory)
 ```
-We can see that people with missing values in Duration are older than those who reported that duration value. this suggest that the missing mechanisim is MAR as the pattern of missingness dependes on the age varaible and not on duration itself. However, we still need to test for the MNAR as it maybe the case that the duration it self has an effect. Let us try a different variables to test against the age and education variables. For instance, the startage and syk_class variables.
+We can see that people with missing values in Duration are older than those who reported that duration value. This suggests that the missing mechanism is MAR as the pattern of missingness depends on the age variable and not on duration itself. However, we still need to test for the MNAR as it may be the case that the duration itself has an effect. Let us try different variables to test against the age and education variables. For instance, the startage and syk_class variables.
 
 ```{r, cache=TRUE}
 explanatory =  c("education", "startage", "syk_class")
@@ -939,15 +943,15 @@ dependent = "age"
 data_all %>%  missing_pairs(dependent, explanatory)
 ```
 
-the same hold true for the startage variable. the same for the relation between age and education: it seems that patients with missing education are older than with non missing. This means that adjusting for age should solve the case. In fact this should result that 
+The same holds for the startage variable. the same for the relationship between age and education: it seems that patients with missing education are older than with non-missing. This means that adjusting for age should solve the case.
 
 # Missing Value Imputation
 
-The above presentation motivate us to preform the MI using the MICE approach. The full description and reproducible workflow can be found [in this Github repository](https://github.com/ranibasna/Modification_Effect_Socioeconomic_smoking_Asthma/blob/master/R/HPC_R_mice_BN_code.R). The code is written in a style to be used inside a High preformace computing environment (HPC). The processes of preformaing MI is going like this.
+The above presentation motivates us to perform the MI using the MICE approach. The full description and reproducible workflow can be found [in this Github repository](https://github.com/ranibasna/Modification_Effect_Socioeconomic_smoking_Asthma/blob/master/R/HPC_R_mice_BN_code.R). The code is written in a style to be used inside a High-performance computing environment (HPC). The process of performing MI is going like this.
 
-1. We first processes the original data by dropping the highely correlated variables
-2. Due to high depndencies between some variables we impose which variables to include in the predictive matrix that is used by mice imputation.
-3. We apply the parlmice which is the version of the R function mice that can perfom a parallel computation
+1. We first processes the original data by dropping the highly correlated variables
+2. Due to high dependencies between some variables we impose which variables to include in the predictive matrix that is used by mice imputation.
+3. We apply the parlmice which is the version of the R function mice that can perform a parallel computation
 
 ```{r, eval=FALSE}
 parlmice(data = data_all, n.core = 8, n.imp.core = 7, maxit = 40, predictorMatrix = pred, seed = 11)
@@ -971,7 +975,7 @@ xyplot(mids_subset,BMI ~ startage + duration,pch=18,cex=1)
 densityplot(mids_subset)
 ```
 
-As seen the imputation model is predicting that most people with missing data are actually a smoker. This explian why the spike of non smoker has disappeared in the imputation models for the duration variable in the figure above. 
+As seen the imputation model is predicting that most people with missing data are actually a smoker. This explains why the spike of non smokers has disappeared in the imputation models for the duration variable in the figure above. 
 
 ```{r, cache=TRUE}
 stripplot(mids_subset, pch = 20, cex = 1.2)
@@ -981,6 +985,7 @@ stripplot(mids_subset, pch = 20, cex = 1.2)
 ```{r, cache=TRUE}
 imp_data <- complete(imp_parl_final, 1)
 ```
+
 
 
 ```{r, cache=TRUE}
@@ -1005,7 +1010,7 @@ vars <- c("age", "duration","duration_imp")
 marginplot(df[,vars], delimiter="imp", alpha=0.6, pch=c(19))
 ```
 
- We can see that the imputation model correct for the fact that the people with older age tend to have missing values are duration and start age, that can be attributed to that fact that either they forgot the starting age (hence the duration as well). Or they did not want to include thos information as it make them feels they have been smoking for long time. This is still valid under the MAR assumption.
+We can see that the imputation model corrects for the fact that the people with older age tend to have missing values are duration and start age, which can be attributed to the fact that either they forgot the starting age (hence the duration as well). Or they did not want to include that information as it makes them feel they have been smoking for a long time. This is still valid under the MAR assumption.
 
 ```{r, cache=TRUE}
 #cat_var <- sei_class
@@ -1028,7 +1033,7 @@ vars <- c("BMI","syk_class","syk_class_imp")
 barMiss(df[,vars], delimiter = "_imp", selection = "any", only.miss = FALSE)
 ```
 
-In general all our validation plots looks healthy and the imputation processes reflects our beleives about the reason of missing values. We have been invetigating only the important variables. Similar analysis process can be applied to different variable to do the checks.
+In general, all our validation plots look healthy and the imputation processes reflect our beliefs about the reason for missing values. We have been investigating only the important variables. A similar analysis process can be applied to different variables to do the checks.
 
 # The dag 
 
@@ -1053,6 +1058,24 @@ adjustment_vars <- c(bn_dag_adjustment[[2]], c("education"))
 
 
 # Sensitivity analysis
+
+Since the MAR hypothesis cannot be verified from observed data @van2018flexible, it is essential to perform sensitivity analyses. Sensitivity analyses will appraise the impact on the current research question imputation results of departures from this MAR assumption.
+
+One proposed method is the use of the delta adjustment method. This approach allows a simple and flexible way by which to impute the incomplete data under general MNAR mechanisms, and thus to assess sensitivity to departures from MAR. The method was originally introduced first by the work of Rubin @rubin1977formalizing, it has also been described and used by van Buuren et al. @van2018flexible and implemented for a variety of variable types in the R package SensMice by Resseguier et al @resseguier2011sensitivity. which we used in our work.
+
+
+To do sensitivity analysis, we apply multiple forms of perturbations to the variables with missing data before applying the imputation process. Then we conduct a regression analysis on the different perturbed imputed sets. The hypothesis is that if the missingness mechanism is of MAR type, then the results should be similar as the imputation process uses the predictive covariates to predict the missing values and the missing value pattern is independent of the value of the variable itself.  
+
+In Specific, After fitting an imputation model for the incomplete variable Y under MAR, implementation of the delta-adjustment method involves adding or deducting a fixed number $\delta$ to the current predictor before imputing missing data using the proposed model. In this sense, it is a simple representation of the pattern-mixture model. When Y is binary and the incomplete data are predicted using a logistic regression model, $\delta$ represents the difference in the log-odds of Y = 1 for individuals with missing Y values compared with individuals with observed Y values.
+
+
+We follow the 3-step strategy proposed by @resseguier2011sensitivity
+
+ 1. Fit an imputation model assuming ignorable missing Data;
+ 2. Adjust the imputation model by adding a fixed quantity $\delta$  to the linear predictor before imputing missing data using the updated model. This $\delta$ specifies a realistic scenario ( usually this is a set of plausible $\delta$-values that assume a MNAR situation). When the variable with missing data Y, is binary and the missing data are imputed using a logistic regression model, $\delta$ represents the difference in the log-odds of Y for individuals with missing Y values compared with individuals with observed Y values.
+ 3. Impute missing Data under the scenario specified in point 2.
+
+In practice, we will select test the above explained approach on the syk_class valriable. The same can be done on other important variable. syk_class is chosen since it has plenty of missingness compared to other variable as well as since it is one of the key variable in the study. For this analysis to be preformed, we will use three $\delta$ values $0,1$ and $1.5$.    
 
 ```{r SenAna, cache=TRUE}
 # e_amount, sei_class and syk_class has the highst missingness. 
@@ -1087,57 +1110,131 @@ fit_c_as_sen_ana_big_3 <- with(sen_ana_mice_imp_3, glm(as.formula(paste("c_asthm
 fits_pool_sen_3 <- fit_c_as_sen_ana_big_3 %>% mice::pool()
 ```
 
+Let us looks at the summary results of the original regressing model and the model that uses $\delta$ value equal $1$.
 
-## Results {.tabset}
 
-### Two
+
+::: {.l-page}
+::: {.panelset}
+
+::: {.panel}
+## 👋 Original Model! {.panel-name}
+
+
+```{r}
+summary(fits_pool, conf.int=TRUE, exponentiate = TRUE)
+```
+:::
+
+::: {.panel}
+## model that uses $\delta$ value equal $0.5$. {.panel-name}
+
+```{r}
+summary(fits_pool_sen, conf.int=TRUE, exponentiate = TRUE)
+```
+:::
+
+::: {.panel}
+## model that uses $\delta$ value equal $1$. {.panel-name}
 
 ```{r}
 summary(fits_pool_sen_2, conf.int=TRUE, exponentiate = TRUE)
 ```
+:::
 
-### Three
+::: {.panel}
+## model that uses $\delta$ value equal $1.5$. {.panel-name}
 
 ```{r}
 summary(fits_pool_sen_3, conf.int=TRUE, exponentiate = TRUE)
 ```
+:::
 
-## Plots
-```{r, cache=TRUE, out.width = "50%", fig.show = "hold", fig.align = "default"}
+:::
+:::
+
+An esier way to compare is to plot the odds ratios for all the four models
+
+::: {.l-page}
+::: {.panelset}
+
+::: {.panel}
+## 👋 Original Model! {.panel-name}
+
+
+```{r}
 explanatory <- adjustment_vars
 dependent <- "c_asthma"
+suppressWarnings(mids_subset$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4, confint_type = "profile"))
+```
+:::
 
-# par(mar = c(4, 4, .1, .1))
+::: {.panel}
+## model that uses $\delta$ value equal $0.5$. {.panel-name}
 
-# imp_test_method$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4)
-# mids_subset$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4)
-# suppressWarnings(mids_subset$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4))
-# data_modeling %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4)
+```{r}
+suppressWarnings(sen_ana_mice_imp_1$data %>% or_plot(dependent, explanatory, glmfit = fits_pool_sen, table_text_size=4, confint_type = "profile"))
+```
+:::
 
-# the sens model
+::: {.panel}
+## model that uses $\delta$ value equal $1$. {.panel-name}
+
+```{r}
 suppressWarnings(sen_ana_mice_imp_2$data %>% or_plot(dependent, explanatory, glmfit = fits_pool_sen_2, table_text_size=4, confint_type = "profile"))
+```
+:::
+
+::: {.panel}
+## model that uses $\delta$ value equal $1.5$. {.panel-name}
+
+```{r}
 suppressWarnings(sen_ana_mice_imp_3$data %>% or_plot(dependent, explanatory, glmfit = fits_pool_sen_3, table_text_size=4, confint_type = "profile"))
 ```
+:::
 
-```{r, echo=FALSE, include=FALSE}
-images = c(
-  "./OR_2.png",
-  "./OR_3.png"
-)
-```
-
-```{r RadarPlot,echo=FALSE, out.width = "50%", fig.show = "hold", fig.align = "default"}
-# par(mar=c(4,4,0.1,0.1))
-knitr::include_graphics(images[1])
-knitr::include_graphics(images[2])
-# knitr::include_graphics(images[3])
-```
+:::
+:::
 
 
-<!-- ```{r} -->
-<!-- suppressWarnings(mids_subset$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4, confint_type = "profile")) -->
-<!-- suppressWarnings(sen_ana_mice_imp_1$data %>% or_plot(dependent, explanatory, glmfit = fits_pool_sen, table_text_size=4, confint_type = "profile")) -->
+<!-- ```{r OR_1, cache=TRUE, out.width = "50%", fig.show = "hold", fig.align = "default"} -->
+<!-- explanatory <- adjustment_vars -->
+<!-- dependent <- "c_asthma" -->
+
+<!-- # par(mar = c(4, 4, .1, .1)) -->
+
+<!-- # imp_test_method$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4) -->
+<!-- # mids_subset$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4) -->
+<!-- # suppressWarnings(mids_subset$data %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4)) -->
+<!-- # data_modeling %>% or_plot(dependent, explanatory, glmfit = fits_pool, table_text_size=4) -->
+
+<!-- # the sens model -->
+<!-- suppressWarnings(sen_ana_mice_imp_2$data %>% or_plot(dependent, explanatory, glmfit = fits_pool_sen_2, table_text_size=4, confint_type = "profile")) -->
+<!-- suppressWarnings(sen_ana_mice_imp_3$data %>% or_plot(dependent, explanatory, glmfit = fits_pool_sen_3, table_text_size=4, confint_type = "profile")) -->
 <!-- ``` -->
+
+
+
+
+<!-- ```{r, echo=FALSE, include=FALSE} -->
+<!-- images = c( -->
+<!--   "./OR_2.png", -->
+<!--   "./OR_3.png" -->
+<!-- ) -->
+<!-- ``` -->
+
+<!-- ```{r ORPlot,echo=FALSE, out.width = "50%", fig.show = "hold", fig.align = "default"} -->
+<!-- # par(mar=c(4,4,0.1,0.1)) -->
+<!-- knitr::include_graphics(images[1]) -->
+<!-- knitr::include_graphics(images[2]) -->
+<!-- # knitr::include_graphics(images[3]) -->
+<!-- ``` -->
+
+
+As seen from the above plot the fours models results in similar odss ratios.  
+
+## Conclusion
+A sensitivity analysis was performed on data from the WSAS and OLIN, to assess the robustness of the OR between asthma and education, including missing Data. We assumed that non-responders were more likely to have a lower education compared to the responders. This assumption has been reflected with the inserted set of $\delta$ values. The modified ORs were stable and robust to the multiple introduced perturbation and scenarios. This strengthens our approach of using the multiple imputations assuming the MAR mechanism. 
 
 
 # Reference
