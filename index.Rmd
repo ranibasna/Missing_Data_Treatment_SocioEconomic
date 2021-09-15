@@ -60,7 +60,7 @@ categories:
 xaringanExtra::use_clipboard()
 ```
 
-```{r xaringan-panelset, echo=FALSE}
+```{r xaringan-panelset, echo=FALSE, include=FALSE}
 xaringanExtra::use_panelset()
 ```
 
@@ -899,7 +899,7 @@ orient_dag <- function(adjmatrix, x, max_continuous_pairs_sample = 5000, continu
 
 
 ```{r data}
-data_all_original <- read_dta("/home/rstudio/socioeconomics/data&Objects/Analysis_dataset(60)25.2.21.dta.dta")
+data_all_original <- read_dta("/home/rstudio/MissingdataArticle/data&Objects/Analysis_dataset(60)25.2.21.dta.dta")
 data_all <- Prepare_data(data_all_original)
 data_all <- Preprocess_Data(data_all)
 ```
@@ -1037,10 +1037,12 @@ In general, all our validation plots look healthy and the imputation processes r
 
 # The dag 
 
-Next we will use the dag theory to run a sensitivity analysis to validate the missing data imputation. If you are not familiar with the dag thery it is recomended to see the .... In simple, the dag allow us to find a minimal set of variables that is needed to study the effect of specific exposure and on an outcome. 
+Next we will use the dag theory to run a sensitivity analysis to validate the missing data imputation. If you are not familiar with the dag theory it is recommended to read about. For instance see @scutari2014bayesian for more details. 
+
+(In)dependency structure can be identified in Bayesian networks, particularly with Directed Acyclic Graphs (DAGs), which are probabilistic graphical models. DAGs learn the underlying dependency structure represent these as networks with directed connections. In simple, the dag allow us to find a minimal set of variables that is needed to study the effect of specific exposure and on an outcome. 
 
 ```{r BNObject}
-str.bootstrap_mice_hc <- readRDS(file = "/home/rstudio/socioeconomics/data&Objects/boot_mice_final_hc.rds")
+str.bootstrap_mice_hc <- readRDS(file = "/home/rstudio/MissingdataArticle/data&Objects/boot_mice_final_hc.rds")
 str.bootstrap_mice_hc_filterd <- str.bootstrap_mice_hc[with(str.bootstrap_mice_hc, strength >= 0.95 & direction >= 0.5), ]
 avg.simpler_mice_hc  <- averaged.network(str.bootstrap_mice_hc_filterd)
 avg.simpler_mice_hc  <- cextend(averaged.network(str.bootstrap_mice_hc_filterd))
